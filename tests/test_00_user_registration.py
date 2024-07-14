@@ -12,8 +12,8 @@ from tests.utils import (
 
 @pytest.mark.django_db(transaction=True)
 class Test00UserRegistration:
-    URL_SIGNUP = '/api/v1/auth/signup/'
-    URL_TOKEN = '/api/v1/auth/token/'
+    URL_SIGNUP = '/api/v1/auth_app/signup/'
+    URL_TOKEN = '/api/v1/auth_app/token/'
     URL_ADMIN_CREATE_USER = '/api/v1/users/'
 
     def test_00_nodata_signup(self, client):
