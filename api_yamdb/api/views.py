@@ -1,7 +1,7 @@
 from django.db.models import Avg
 from django.http import Http404
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, permissions, status
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework import viewsets, permissions, status, mixins, filters
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny
@@ -10,9 +10,9 @@ from rest_framework.response import Response
 from reviews.models import Review, Comment, Category, Genre, Title
 from users.models import CustomUser
 from users.permissions import IsAuthorOrReadOnly, IsAdminOrReadOnly, IsUser
-from .mixins import CreateListDestroyViewset
-from .serializers import (CategorySerializer, GenreSerializer,
-                          TitleSerializer, ReviewSerializer, CommentSerializer)
+from .serializers import (CategorySerializer, GenreSerializer, TitleReadSerializer,
+                        TitleCreateSerializer, ReviewSerializer, CommentSerializer)
+from .filters import TitleFilter
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -39,8 +39,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         # этого пользователя на данное произведение
         if Review.objects.filter(title=title, author=user).exists():
             raise ValidationError(
-                'Вы уже оставляли свой отзыв на это произведение!'
-            )
+                'Вы уже оставляли свой отзыв на это произведение!')
         # Сохраняем новый отзыв
         serializer.save(author=user, title=title)
 
@@ -87,7 +86,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED,
+        return Response(serializer.data,
+                        status=status.HTTP_201_CREATED,
                         headers=headers)
 
     def get_permissions(self):
@@ -100,49 +100,42 @@ class CommentViewSet(viewsets.ModelViewSet):
         return [permissions.AllowAny()]
 
 
+class CreateListDestroyViewset(
+        mixins.CreateModelMixin,
+        mixins.ListModelMixin,
+        mixins.DestroyModelMixin,
+        viewsets.GenericViewSet,
+):
+    search_fields = ('name', )
+    lookup_field = 'slug'
+    filter_backends = (filters.SearchFilter, )
+    permission_classes = (IsAdminOrReadOnly, )
+
+
 class CategoryViewSet(CreateListDestroyViewset):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = (IsAdminOrReadOnly,)
+    permission_classes = (IsAdminOrReadOnly, )
 
 
 class GenreViewSet(CreateListDestroyViewset):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
-    permission_classes = (IsAdminOrReadOnly,)
+    permission_classes = (IsAdminOrReadOnly, )
 
 
 class TitleViewSet(viewsets.ModelViewSet):
     queryset = Title.objects.annotate(
-        rating=Avg('reviews__score')).order_by('-rating')
-    serializer_class = TitleSerializer
-    permission_classes = (IsAdminOrReadOnly,)
+        rating=Avg('reviews__score')).order_by('-rating', 'name')
+    serializer_class = TitleCreateSerializer
+    permission_classes = (IsAdminOrReadOnly, )
     pagination_class = LimitOffsetPagination
+    filter_backends = (filters.SearchFilter, DjangoFilterBackend)
+    filterset_class = TitleFilter
 
-    def perform_create(self, serializer):
-        category = get_object_or_404(
-            Category, slug=self.request.data.get('category')
-        )
-        genre = Genre.objects.filter(
-            slug__in=self.request.data.getlist('genre')
-        )
-        serializer.save(category=category, genre=genre)
+    def get_serializer_class(self):
+        if self.action in ('create', 'update', 'partial_update'):
+            return TitleCreateSerializer
+        return TitleReadSerializer
 
-    def perform_update(self, serializer):
-        self.perform_create(serializer)
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        genre_slug = self.request.query_params.get('genre')
-        if genre_slug:
-            queryset = queryset.filter(genre__slug=genre_slug)
-        category_slug = self.request.query_params.get('category')
-        if category_slug:
-            queryset = queryset.filter(category__slug=category_slug)
-        title_year = self.request.query_params.get('year')
-        if title_year:
-            queryset = queryset.filter(year=int(title_year))
-        name = self.request.query_params.get('name')
-        if name:
-            queryset = queryset.filter(name=name)
-        return queryset

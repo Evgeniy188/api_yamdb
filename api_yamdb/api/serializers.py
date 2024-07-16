@@ -13,7 +13,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'text', 'author', 'score', 'pub_date']
+        fields = ('id', 'text', 'author', 'score', 'pub_date')
 
     def validate_score(self, value):
         if not (1 <= value <= 10):
@@ -39,7 +39,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'text', 'author', 'pub_date']
+        fields = ('id', 'text', 'author', 'pub_date')
 
     def update(self, instance, validated_data):
         if not isinstance(instance.author, CustomUser):
@@ -55,29 +55,37 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        exclude = ['id']
+        exclude = ('id',)
         model = Category
 
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
-        exclude = ['id']
+        exclude = ('id',)
         model = Genre
 
 
-class TitleSerializer(serializers.ModelSerializer):
+class TitleReadSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     genre = GenreSerializer(many=True, read_only=True)
-    rating = serializers.FloatField(read_only=True)
+    rating = serializers.IntegerField(read_only=True, default=None)
 
     class Meta:
         model = Title
         fields = '__all__'
 
-    def update(self, instance, validated_data):
-        request_method = self.context['request'].method
-        if request_method == 'PUT':
-            raise MethodNotAllowed("PUT")
-        instance = super().update(instance, validated_data)
-        instance.save()
-        return instance
+
+class TitleCreateSerializer(serializers.ModelSerializer):
+    category = serializers.SlugRelatedField(
+        queryset=Category.objects.all(),
+        slug_field='slug',
+    )
+    genre = serializers.SlugRelatedField(
+        queryset=Genre.objects.all(),
+        slug_field='slug',
+        many=True,
+    )
+
+    class Meta:
+        model = Title
+        fields = '__all__'
