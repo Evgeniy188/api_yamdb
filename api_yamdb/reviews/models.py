@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 
 from .validators import year_validator
-from constants import NAME_LENGTH, SLUG_LENGTH, TEXT_LIMIT
+from .constants import NAME_LENGTH, SLUG_LENGTH, TEXT_LIMIT
 
 User = get_user_model()
 
