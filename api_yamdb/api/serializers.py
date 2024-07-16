@@ -89,3 +89,15 @@ class TitleCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Title
         fields = '__all__'
+
+    def to_representation(self, instance):
+        serializer = TitleReadSerializer(instance)
+        return serializer.data
+
+    def update(self, instance, validated_data):
+        request_method = self.context['request'].method
+        if request_method == 'PUT':
+            raise MethodNotAllowed("PUT")
+        instance = super().update(instance, validated_data)
+        instance.save()
+        return instance
