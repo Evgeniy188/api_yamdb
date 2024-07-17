@@ -23,87 +23,46 @@ from .serializers import (CategorySerializer, CommentSerializer,
 
 class ReviewViewSet(viewsets.ModelViewSet):
     serializer_class = ReviewSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        # Получаем идентификатор произведения из параметров пути
-        title_id = self.kwargs['title_id']
-        # Возвращаем набор данных,
-        # отфильтрованный по идентификатору произведения
-        return Review.objects.filter(title_id=title_id)
+        title = self.get_title()
+        return title.reviews.all()
 
     def perform_create(self, serializer):
-        # Получаем идентификатор произведения из параметров пути
-        title_id = self.kwargs['title_id']
-        # Получаем объект произведения по этому идентификатору
-        try:
-            title = Title.objects.get(id=title_id)
-        except Title.DoesNotExist:
-            raise Http404('Title not found.')
-        # Получаем текущего пользователя (автора отзыва)
+        title = self.get_title()
         user = self.request.user
-        # Проверяем, существует ли уже отзыв от
-        # этого пользователя на данное произведение
-        if Review.objects.filter(title=title, author=user).exists():
-            raise ValidationError(
-                'Вы уже оставляли свой отзыв на это произведение!'
-            )
-        # Сохраняем новый отзыв
         serializer.save(author=user, title=title)
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-
     def get_permissions(self):
-        # Определяем права доступа в зависимости от действия (action)
         if self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthorOrReadOnly()]
         if self.action == "create":
-            return [IsAuthenticated()]
-        # По умолчанию разрешаем доступ всем
+            return [IsUser()]
         return [permissions.AllowAny()]
+
+    def get_title(self):
+        title_id = self.kwargs['title_id']
+        return get_object_or_404(Title, id=title_id)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
     serializer_class = CommentSerializer
-    permission_classes = [AllowAny()]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsAuthorOrReadOnly]
+    http_method_names = ['get', 'post', 'patch', 'delete']
 
     def get_queryset(self):
-        # Получаем идентификатор отзыва из параметров пути
-        review_id = self.kwargs['review_id']
-        # Возвращаем набор данных, отфильтрованный по идентификатору отзыва
-        return Comment.objects.filter(review_id=review_id)
+        review = self.get_review()
+        return review.comments.all()
 
     def perform_create(self, serializer):
-        # Получаем идентификатор отзыва из параметров пути
-        review_id = self.kwargs['review_id']
-        try:
-            review = Review.objects.get(id=review_id)
-        except Review.DoesNotExist:
-            raise Http404('Review not found.')
+        review = self.get_review()
         user = self.request.user
-        # Сохраняем новый комментарий
         serializer.save(author=user, review=review)
 
-    def post(self, request, *args, **kwargs):
-        user = self.request.user
-        if not user.is_authenticated:
-            return Response({'detail': 'Only authenticated users can comment'},
-                            status=status.HTTP_401_UNAUTHORIZED)
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(serializer.data, status=status.HTTP_201_CREATED,
-                        headers=headers)
-
-    def get_permissions(self):
-        # Определяем права доступа в зависимости от действия (action)
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthorOrReadOnly()]
-        if self.action == "create":
-            return [AllowAny()]
-        # По умолчанию разрешаем доступ всем
-        return [permissions.AllowAny()]
+    def get_review(self):
+        review_id = self.kwargs['review_id']
+        return get_object_or_404(Review, id=review_id)
 
 
 class CategoryViewSet(CreateListDestroyViewset):

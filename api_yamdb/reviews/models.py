@@ -99,7 +99,7 @@ class PubDateMixin(models.Model):
     class Meta:
         abstract = True
 
-
+ 
 class Review(PubDateMixin, models.Model):
     title = models.ForeignKey(
         Title,
