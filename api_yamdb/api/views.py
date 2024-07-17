@@ -1,18 +1,24 @@
+from api.permissions import IsAdmin
 from django.db.models import Avg
 from django.http import Http404
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, permissions, status
-from rest_framework.exceptions import ValidationError
+from rest_framework import generics, permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.filters import SearchFilter
 from rest_framework.pagination import LimitOffsetPagination
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
+from reviews.models import Category, Comment, Genre, Review, Title
+from users.models import CinemaUser as User
 
-from reviews.models import Review, Comment, Category, Genre, Title
-from users.models import CustomUser
-from users.permissions import IsAuthorOrReadOnly, IsAdminOrReadOnly, IsUser
 from .mixins import CreateListDestroyViewset
-from .serializers import (CategorySerializer, GenreSerializer,
-                          TitleSerializer, ReviewSerializer, CommentSerializer)
+from .permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly
+from .serializers import (CategorySerializer, CommentSerializer,
+                          CreateTokenSerializer, GenreSerializer,
+                          ReviewSerializer, SignupSerializer, TitleSerializer,
+                          UserSerializer)
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -52,7 +58,7 @@ class ReviewViewSet(viewsets.ModelViewSet):
         if self.action in ['update', 'partial_update', 'destroy']:
             return [IsAuthorOrReadOnly()]
         if self.action == "create":
-            return [IsUser()]
+            return [IsAuthenticated()]
         # По умолчанию разрешаем доступ всем
         return [permissions.AllowAny()]
 
@@ -80,7 +86,7 @@ class CommentViewSet(viewsets.ModelViewSet):
 
     def post(self, request, *args, **kwargs):
         user = self.request.user
-        if not isinstance(user, CustomUser):
+        if not user.is_authenticated:
             return Response({'detail': 'Only authenticated users can comment'},
                             status=status.HTTP_401_UNAUTHORIZED)
         serializer = self.get_serializer(data=request.data)
@@ -146,3 +152,88 @@ class TitleViewSet(viewsets.ModelViewSet):
         if name:
             queryset = queryset.filter(name=name)
         return queryset
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [IsAdmin]
+    lookup_field = 'username'
+    filter_backends = [SearchFilter]
+    search_fields = ['username', 'email', 'first_name',
+                     'last_name', 'bio', 'role']
+
+    def get_permissions(self):
+        if self.action in ['me', 'update_profile']:
+            self.permission_classes = [IsAuthenticated]
+        else:
+            self.permission_classes = [IsAdmin]
+        return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        if request.method == 'PUT':
+            raise MethodNotAllowed('PUT')
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance,
+                                         data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get', 'patch', 'delete'],
+            permission_classes=[IsAuthenticated])
+    def me(self, request, *args, **kwargs):
+        if request.method == 'GET':
+            serializer = self.get_serializer(request.user)
+            return Response(serializer.data)
+        elif request.method == 'PATCH':
+            partial = True
+            serializer = self.get_serializer(request.user,
+                                             data=request.data,
+                                             partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data)
+        elif request.method == 'DELETE':
+            raise MethodNotAllowed(request.method)
+
+    @action(detail=True, methods=['patch'], permission_classes=[IsAdmin])
+    def update_profile(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+    def put(self, request, *args, **kwargs):
+        raise MethodNotAllowed('PUT')
+
+
+class SignupView(generics.CreateAPIView):
+    serializer_class = SignupSerializer
+    permission_classes = [permissions.AllowAny]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class CreateTokenView(generics.CreateAPIView):
+    serializer_class = CreateTokenSerializer
+    permission_classes = [permissions.AllowAny]
+    renderer_classes = [JSONRenderer]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        token = serializer.save()
+        return Response({"token": token["access"]}, status=status.HTTP_200_OK)
