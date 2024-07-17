@@ -1,6 +1,5 @@
-from pathlib import Path
 from datetime import timedelta
-
+from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -25,7 +24,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'reviews',
     'api',
-    'auth_app',
     'users',
 ]
 
@@ -135,4 +133,7 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1)
 }
 
-AUTH_USER_MODEL = 'users.CustomUser'
+AUTH_USER_MODEL = 'users.CinemaUser'
+
+
+EMAIL_FROM = 'yamdb@example.com'
