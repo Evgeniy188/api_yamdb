@@ -2,46 +2,47 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-from .validators import characters_validator, year_validator
+from .validators import year_validator
+from .constants import NAME_LENGTH, SLUG_LENGTH, TEXT_LIMIT
 
 User = get_user_model()
 
 
-class Category(models.Model):
+class CategoryGenreAbstract(models.Model):
+    slug = models.SlugField('Слаг', unique=True, max_length=SLUG_LENGTH)
+
+    class Meta:
+        abstract = True
+        ordering = ('name', )
+
+    def __str__(self):
+        return self.name
+
+
+class Category(CategoryGenreAbstract):
     "Категории произведений"
 
-    name = models.CharField('Категория', max_length=256)
-    slug = models.SlugField('Слаг', unique=True, max_length=50,
-                            validators=[characters_validator])
+    name = models.CharField('Категория', max_length=NAME_LENGTH)
 
-    class Meta:
-        ordering = ('name',)
-        verbose_name = 'Категория'
-        verbose_name_plural = 'Катогрии'
-
-    def __str__(self):
-        return self.name
+    class Meta(CategoryGenreAbstract.Meta):
+        verbose_name = 'Название'
+        verbose_name_plural = 'Названия категорий'
 
 
-class Genre(models.Model):
+class Genre(CategoryGenreAbstract):
     "Жанры произведений"
 
-    name = models.CharField('Жанр', max_length=256)
-    slug = models.SlugField('Слаг', unique=True, max_length=50)
+    name = models.CharField('Жанр', max_length=NAME_LENGTH)
 
-    class Meta:
-        ordering = ('name',)
+    class Meta(CategoryGenreAbstract.Meta):
         verbose_name = 'Жанр'
         verbose_name_plural = 'Жанры'
-
-    def __str__(self):
-        return self.name
 
 
 class Title(models.Model):
     "Произведения"
 
-    name = models.CharField('Произведение', max_length=256)
+    name = models.CharField('Произведение', max_length=NAME_LENGTH)
     year = models.SmallIntegerField('Год выпуска', db_index=True,
                                     validators=[year_validator])
     description = models.TextField('Описание', blank=True)
@@ -57,7 +58,6 @@ class Title(models.Model):
         verbose_name='Категория',
         on_delete=models.SET_NULL,
         null=True,
-        blank=True,
     )
 
     class Meta:
@@ -70,25 +70,35 @@ class Title(models.Model):
 
 
 class GenreTitle(models.Model):
-    """Вспомогательная модель жанров произведения."""
-
     title = models.ForeignKey(
         Title,
+        blank=True,
+        null=True,
         on_delete=models.CASCADE,
-        verbose_name='Произведение',
+        related_name='titles',
+        verbose_name='Произведение'
     )
     genre = models.ForeignKey(
         Genre,
-        on_delete=models.CASCADE,
-        verbose_name='Жанр',
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='genres',
+        verbose_name='Жанр'
     )
 
     class Meta:
         verbose_name = 'Жанр произведения'
-        verbose_name_plural = 'Произведения и жанры'
+        verbose_name_plural = 'Жанры произведения'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['title', 'genre'],
+                name='unique_combination_gt'
+            )
+        ]
 
     def __str__(self):
-        return f'{self.title}, {self.genre}'
+        return f'{self.title} - {self.genre}'
 
 
 class PubDateMixin(models.Model):
@@ -129,7 +139,7 @@ class Review(PubDateMixin, models.Model):
         verbose_name_plural = 'Отзывы'
 
     def __str__(self):
-        return self.text[:20]
+        return self.text[:TEXT_LIMIT]
 
 
 class Comment(PubDateMixin, models.Model):
@@ -146,7 +156,7 @@ class Comment(PubDateMixin, models.Model):
     )
 
     def __str__(self):
-        return self.text[:20]
+        return self.text[:TEXT_LIMIT]
 
     class Meta:
         verbose_name = 'Комментарий'

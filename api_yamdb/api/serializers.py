@@ -5,7 +5,7 @@ from api.roles import RoleEnum
 from api.utils import generate_confirmation_code, send_confirmation_email
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
-from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework_simplejwt.tokens import AccessToken
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CinemaUser as User
@@ -22,18 +22,22 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ('id', 'text', 'author', 'score', 'pub_date')
+        fields = ['id', 'text', 'author', 'score', 'pub_date']
 
-    def validate(self, data):
-        request = self.context['request']
-        if request.method == 'POST':
-            user = request.user
-            title_id = request.parser_context['kwargs']['title_id']
-            if Review.objects.filter(title_id=title_id, author=user).exists():
-                raise ValidationError(
-                    'Вы уже оставляли отзыв на это произведение'
-                )
-        return data
+    def validate_score(self, value):
+        if not (1 <= value <= 10):
+            raise serializers.ValidationError(
+                'Оценка должна быть между 1 и 10'
+            )
+        return value
+
+    def update(self, instance, validated_data):
+        request_method = self.context['request'].method
+        if request_method == 'PUT':
+            raise MethodNotAllowed("PUT")
+        instance = super().update(instance, validated_data)
+        instance.save()
+        return instance
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -44,7 +48,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ('id', 'text', 'author', 'pub_date')
+        fields = ['id', 'text', 'author', 'pub_date']
 
     def update(self, instance, validated_data):
         if not instance.author.is_authenticated:
@@ -70,14 +74,34 @@ class GenreSerializer(serializers.ModelSerializer):
         model = Genre
 
 
-class TitleSerializer(serializers.ModelSerializer):
+class TitleReadSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     genre = GenreSerializer(many=True, read_only=True)
-    rating = serializers.FloatField(read_only=True)
+    rating = serializers.IntegerField(read_only=True, default=None)
 
     class Meta:
         model = Title
         fields = '__all__'
+
+
+class TitleCreateSerializer(serializers.ModelSerializer):
+    category = serializers.SlugRelatedField(
+        queryset=Category.objects.all(),
+        slug_field='slug',
+    )
+    genre = serializers.SlugRelatedField(
+        queryset=Genre.objects.all(),
+        slug_field='slug',
+        many=True,
+    )
+
+    class Meta:
+        model = Title
+        fields = '__all__'
+
+    def to_representation(self, instance):
+        serializer = TitleReadSerializer(instance)
+        return serializer.data
 
     def update(self, instance, validated_data):
         request_method = self.context['request'].method
