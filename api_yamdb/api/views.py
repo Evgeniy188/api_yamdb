@@ -1,9 +1,8 @@
-from api.permissions import IsAdmin
 from django.db.models import Avg
 from django.http import Http404
-from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import generics, permissions, status, viewsets, mixins, filters
+from rest_framework import (generics, permissions, status, viewsets, mixins,
+                            filters)
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, ValidationError
 from rest_framework.filters import SearchFilter
@@ -15,7 +14,7 @@ from rest_framework.response import Response
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CinemaUser as User
 
-from .permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly
+from .permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly, IsAdmin
 from .serializers import (CategorySerializer, CommentSerializer,
                           CreateTokenSerializer, GenreSerializer,
                           ReviewSerializer, SignupSerializer,
