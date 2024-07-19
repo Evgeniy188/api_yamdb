@@ -1,14 +1,16 @@
 import logging
-import re
 
-from api.roles import RoleEnum
 from api.utils import generate_confirmation_code, send_confirmation_email
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework_simplejwt.tokens import AccessToken
 from reviews.models import Category, Comment, Genre, Review, Title
+from users.constants import MAX_LENGTH_EMAIL, MAX_LENGTH_USERNAME
 from users.models import CinemaUser as User
+from users.roles import RoleEnum
+from users.validators import validate_username_me
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,7 +24,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Review
-        fields = ['id', 'text', 'author', 'score', 'pub_date']
+        fields = ('id', 'text', 'author', 'score', 'pub_date')
 
     def validate_score(self, value):
         if not (1 <= value <= 10):
@@ -48,7 +50,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'text', 'author', 'pub_date']
+        fields = ('id', 'text', 'author', 'pub_date')
 
     def update(self, instance, validated_data):
         if not instance.author.is_authenticated:
@@ -64,13 +66,13 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        exclude = ['id']
+        exclude = ('id',)
         model = Category
 
 
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
-        exclude = ['id']
+        exclude = ('id',)
         model = Genre
 
 
@@ -115,78 +117,18 @@ class TitleCreateSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['username', 'email', 'first_name',
-                  'last_name', 'bio', 'role']
-
-    def __init__(self, *args, **kwargs):
-        super(UserSerializer, self).__init__(*args, **kwargs)
-        request = self.context.get('request', None)
-
-        if request:
-            if request.method == 'GET':
-                if 'pk' in request.parser_context['kwargs']:
-                    self.fields['role'].read_only = True
-            elif request.method == 'POST':
-                # Create view
-                self.fields['username'].required = True
-                self.fields['email'].required = True
-                self.fields['first_name'].required = False
-                self.fields['last_name'].required = False
-                self.fields['bio'].required = False
-                self.fields['role'].required = False
-            elif request.method in ['PUT', 'PATCH']:
-                self.fields['role'].read_only = False
-
-    def validate(self, data):
-        request = self.context.get('request', None)
-        if request:
-            if request.method == 'POST':
-                email = data.get('email')
-                username = data.get('username')
-                if not email:
-                    raise serializers.ValidationError("email is required")
-                if User.objects.filter(email=email).exists():
-                    raise serializers.ValidationError("Email already exists.")
-                if User.objects.filter(username=username).exists():
-                    raise serializers.ValidationError(
-                        "Username already exists.")
-            role = data.get('role')
-            if role and role not in RoleEnum.values:
-                raise serializers.ValidationError("Invalid role.")
-        return data
-
-    def validate_role(self, value):
-        if value not in RoleEnum.values:
-            raise serializers.ValidationError("Invalid role.")
-        return value
-
-    def create(self, validated_data):
-        validated_data.setdefault('first_name', '')
-        validated_data.setdefault('last_name', '')
-        validated_data.setdefault('bio', '')
-        validated_data.setdefault('role', RoleEnum.USER.value)
-
-        user = User.objects.create(**validated_data)
-        return user
-
-    def update(self, instance, validated_data):
-        request = self.context.get('request', None)
-        if request and request.method == 'PUT':
-            raise MethodNotAllowed("PUT")
-        bio = validated_data.get('bio')
-        validated_data.pop('role', None)
-        instance = super().update(instance, validated_data)
-        if bio is not None:
-            instance.bio = bio
-        instance.save()
-        return instance
+        fields = ('username', 'email', 'first_name',
+                  'last_name', 'bio', 'role')
 
 
 class SignupSerializer(serializers.Serializer):
     username = serializers.CharField(
-        max_length=150,
+        max_length=MAX_LENGTH_USERNAME,
         required=False,
-        validators=[],
+        validators=[
+            UnicodeUsernameValidator(),
+            validate_username_me
+        ],
         error_messages={
             'blank': 'This field may not be blank.',
             'required': 'This field is required.',
@@ -194,7 +136,7 @@ class SignupSerializer(serializers.Serializer):
         }
     )
     email = serializers.EmailField(
-        required=False, max_length=254,
+        required=False, max_length=MAX_LENGTH_EMAIL,
         error_messages={
             'blank': 'This field may not be blank.',
             'required': 'This field is required.',
@@ -203,26 +145,19 @@ class SignupSerializer(serializers.Serializer):
         }
     )
 
-    def validate_username(self, value):
-        RESTRICTED_USERNAMES = ('me',)
-        MAX_USERNAME_LENGTH = 150
-        USERNAME_PATTERN = r'^[\w.@+-]+\Z'
-
-        if value.lower() in RESTRICTED_USERNAMES:
-            raise serializers.ValidationError('Username is restricted')
-        if len(value) > MAX_USERNAME_LENGTH:
-            raise serializers.ValidationError('Username is too long')
-        if not re.match(USERNAME_PATTERN, value):
-            raise serializers.ValidationError(
-                "Username must contain only letters, "
-                "numbers, dots, underscores, and dashes")
-        return value
-
     def validate(self, data):
         username = data.get('username')
         email = data.get('email')
         errors = {}
 
+        """
+        Данные проверки не получится убрать, так как тесты
+        требуют определенного формата ответа, отличающегося
+        от стандартного, если данных полей нет.
+
+        Тесты, которые это требуют:
+        test_00_nodata_signup и test_00_invalid_data_signup
+        """
         if not username:
             errors['username'] = 'This field is required.'
         if not email:
@@ -231,18 +166,14 @@ class SignupSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
 
-        if User.objects.filter(username=username).exists():
-            user = User.objects.get(username=username)
-            if user.email != email:
-                raise serializers.ValidationError({
-                    'email': 'Email does not match the registered username.'
-                })
-        if User.objects.filter(email=email).exists():
-            user = User.objects.get(email=email)
-            if user.username != username:
-                raise serializers.ValidationError({
-                    'username': 'Wrong username'
-                })
+        user_by_email = User.objects.filter(email=email).first()
+        user_by_username = User.objects.filter(username=username).first()
+
+        if user_by_username and user_by_email is None:
+            raise serializers.ValidationError(
+                {'email': 'Email does not match the registered username'})
+        if user_by_email and user_by_username is None:
+            raise serializers.ValidationError({'username': 'Wrong username'})
 
         return data
 
@@ -253,8 +184,8 @@ class SignupSerializer(serializers.Serializer):
         # Check if the user already exists
         user, created = User.objects.get_or_create(
             username=username,
-            defaults={'email': email,
-                      'is_active': False, 'role': RoleEnum.USER.value}
+            email=email,
+            defaults={'is_active': False, 'role': RoleEnum.USER.value}
         )
         confirmation_code = generate_confirmation_code()
         user.confirmation_code = confirmation_code
@@ -265,11 +196,8 @@ class SignupSerializer(serializers.Serializer):
 
 
 class CreateTokenSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=150)
-    confirmation_code = serializers.CharField(max_length=6)
-
-    class Meta:
-        fields = ['username', 'confirmation_code']
+    username = serializers.CharField(max_length=MAX_LENGTH_USERNAME)
+    confirmation_code = serializers.CharField()
 
     def validate(self, data):
         username = data.get('username')
