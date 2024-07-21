@@ -2,7 +2,6 @@ import logging
 
 from rest_framework import permissions
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 

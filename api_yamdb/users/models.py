@@ -1,18 +1,12 @@
 from django.contrib.auth.models import AbstractUser
-from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from users.roles import RoleEnum
 
-from api.roles import RoleEnum
-
-
-def validate_username_me(value):
-    if value.lower() == 'me':
-        raise ValidationError(
-            _('Username cannot be "me".'),
-            params={'value': value},
-        )
+from .constants import (MAX_LENGTH_CONFIRMATION, MAX_LENGTH_EMAIL,
+                        MAX_LENGTH_ROLE, MAX_LENGTH_USERNAME)
+from .validators import validate_username_me
 
 
 class CinemaUser(AbstractUser):
@@ -25,27 +19,24 @@ class CinemaUser(AbstractUser):
     def is_moderator(self):
         return self.role == RoleEnum.MODERATOR
 
-    role = models.CharField(max_length=20, choices=RoleEnum.choices,
+    role = models.CharField(max_length=MAX_LENGTH_ROLE,
+                            choices=RoleEnum.choices,
                             default=RoleEnum.USER)
 
     bio = models.TextField(blank=True, null=False, default='')
 
     email = models.EmailField(_('email address'),
-                              max_length=254, blank=True, unique=True)
+                              max_length=MAX_LENGTH_EMAIL,
+                              blank=True, unique=True)
 
-    confirmation_code = models.CharField(max_length=6,
+    confirmation_code = models.CharField(max_length=MAX_LENGTH_CONFIRMATION,
                                          blank=True, null=False, default='')
 
     username = models.CharField(
-        max_length=150,
+        max_length=MAX_LENGTH_USERNAME,
         unique=True,
         validators=[
-            RegexValidator(
-                regex=r'^[\w.@+-]+\Z',
-                message=_('Enter a valid username.'
-                          'This value may contain only letters,'
-                          'numbers, and @/./+/-/_ characters.')
-            ),
+            UnicodeUsernameValidator(),
             validate_username_me
         ],
         error_messages={
@@ -56,7 +47,7 @@ class CinemaUser(AbstractUser):
     class Meta:
         verbose_name = 'Пользователь'
         verbose_name_plural = 'Пользователи'
-        ordering = ['username']
+        ordering = ('username',)
 
     def __str__(self):
         return self.username

@@ -1,8 +1,8 @@
 from django.db.models import Avg
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import (generics, permissions, status, viewsets, mixins,
-                            filters)
+from rest_framework import (filters, generics, mixins, permissions,
+                            serializers, status, viewsets)
 from rest_framework.decorators import action
 from rest_framework.exceptions import MethodNotAllowed, ValidationError
 from rest_framework.filters import SearchFilter
@@ -10,17 +10,16 @@ from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
-
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.models import CinemaUser as User
 
-from .permissions import IsAdminOrReadOnly, IsAuthorOrReadOnly, IsAdmin
+from .filters import TitleFilter
+from .permissions import IsAdmin, IsAdminOrReadOnly, IsAuthorOrReadOnly
 from .serializers import (CategorySerializer, CommentSerializer,
                           CreateTokenSerializer, GenreSerializer,
                           ReviewSerializer, SignupSerializer,
-                          TitleReadSerializer, TitleCreateSerializer,
+                          TitleCreateSerializer, TitleReadSerializer,
                           UserSerializer)
-from .filters import TitleFilter
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
@@ -147,56 +146,36 @@ class TitleViewSet(viewsets.ModelViewSet):
 
 
 class UserViewSet(viewsets.ModelViewSet):
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [IsAdmin]
     lookup_field = 'username'
     filter_backends = [SearchFilter]
-    search_fields = ['username', 'email', 'first_name',
-                     'last_name', 'bio', 'role']
+    search_fields = ['username']
 
-    def get_permissions(self):
-        if self.action in ['me', 'update_profile']:
-            self.permission_classes = [IsAuthenticated]
-        else:
-            self.permission_classes = [IsAdmin]
-        return super().get_permissions()
+    def perform_create(self, serializer):
+        if 'email' not in self.request.data:
+            raise serializers.ValidationError({
+                'detail': 'Only authenticated users can comment'})
+        serializer.save()
 
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        if request.method == 'PUT':
-            raise MethodNotAllowed('PUT')
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        serializer = self.get_serializer(instance,
-                                         data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        return Response(serializer.data)
-
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=['get', 'patch', 'delete'],
+    @action(detail=False, methods=['get', 'patch'],
             permission_classes=[IsAuthenticated])
     def me(self, request, *args, **kwargs):
         if request.method == 'GET':
             serializer = self.get_serializer(request.user)
             return Response(serializer.data)
-        elif request.method == 'PATCH':
-            partial = True
-            serializer = self.get_serializer(request.user,
-                                             data=request.data,
-                                             partial=partial)
-            serializer.is_valid(raise_exception=True)
-            self.perform_update(serializer)
-            return Response(serializer.data)
-        elif request.method == 'DELETE':
-            raise MethodNotAllowed(request.method)
+
+        partial = True
+        data = dict(request.data)
+        data.pop('role', None)
+        serializer = self.get_serializer(request.user,
+                                         data=request.data,
+                                         partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(role=request.user.role)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdmin])
     def update_profile(self, request, *args, **kwargs):
