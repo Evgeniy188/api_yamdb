@@ -20,14 +20,11 @@ router_v1.register(
     CommentViewSet,
     basename='comment'
 )
-
-router = DefaultRouter()
-router.register(r'v1/users', UserViewSet, basename='user')
+router_v1.register(r'users', UserViewSet, basename='user')
 
 
 urlpatterns = [
     path('v1/', include(router_v1.urls)),
-    path('', include(router.urls)),
     path('v1/auth/signup/', SignupView.as_view(), name='user-signup'),
     path('v1/auth/token/', CreateTokenView.as_view(),
          name='token-generation'),

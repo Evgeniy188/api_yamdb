@@ -1,19 +1,15 @@
-import logging
-
-from api.utils import generate_confirmation_code, send_confirmation_email
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import AccessToken
+
+from api.utils import generate_confirmation_code, send_confirmation_email
 from reviews.models import Category, Comment, Genre, Review, Title
 from users.constants import MAX_LENGTH_EMAIL, MAX_LENGTH_USERNAME
 from users.models import CinemaUser as User
 from users.roles import RoleEnum
 from users.validators import validate_username_me
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -26,20 +22,16 @@ class ReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = ('id', 'text', 'author', 'score', 'pub_date')
 
-    def validate_score(self, value):
-        if not (1 <= value <= 10):
-            raise serializers.ValidationError(
-                'Оценка должна быть между 1 и 10'
-            )
-        return value
-
-    def update(self, instance, validated_data):
-        request_method = self.context['request'].method
-        if request_method == 'PUT':
-            raise MethodNotAllowed("PUT")
-        instance = super().update(instance, validated_data)
-        instance.save()
-        return instance
+    def validate(self, data):
+        request = self.context['request']
+        if request.method == 'POST':
+            user = request.user
+            title_id = request.parser_context['kwargs']['title_id']
+            if Review.objects.filter(title_id=title_id, author=user).exists():
+                raise ValidationError(
+                    'Вы уже оставляли отзыв на это произведение'
+                )
+        return data
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -51,17 +43,6 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ('id', 'text', 'author', 'pub_date')
-
-    def update(self, instance, validated_data):
-        if not instance.author.is_authenticated:
-            raise serializers.ValidationError(
-                "Автор должен быть пользователем")
-        request_method = self.context['request'].method
-        if request_method == 'PUT':
-            raise MethodNotAllowed("PUT")
-        instance = super().update(instance, validated_data)
-        instance.save()
-        return instance
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -95,6 +76,8 @@ class TitleCreateSerializer(serializers.ModelSerializer):
         queryset=Genre.objects.all(),
         slug_field='slug',
         many=True,
+        allow_null=False,
+        allow_empty=False
     )
 
     class Meta:
@@ -104,14 +87,6 @@ class TitleCreateSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         serializer = TitleReadSerializer(instance)
         return serializer.data
-
-    def update(self, instance, validated_data):
-        request_method = self.context['request'].method
-        if request_method == 'PUT':
-            raise MethodNotAllowed("PUT")
-        instance = super().update(instance, validated_data)
-        instance.save()
-        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):

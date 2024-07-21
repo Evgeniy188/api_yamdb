@@ -10,6 +10,7 @@ User = get_user_model()
 
 class CategoryGenreAbstract(models.Model):
     slug = models.SlugField('Слаг', unique=True, max_length=SLUG_LENGTH)
+    name = models.CharField('Название', max_length=NAME_LENGTH)
 
     class Meta:
         abstract = True
@@ -22,8 +23,6 @@ class CategoryGenreAbstract(models.Model):
 class Category(CategoryGenreAbstract):
     "Категории произведений"
 
-    name = models.CharField('Категория', max_length=NAME_LENGTH)
-
     class Meta(CategoryGenreAbstract.Meta):
         verbose_name = 'Название'
         verbose_name_plural = 'Названия категорий'
@@ -31,8 +30,6 @@ class Category(CategoryGenreAbstract):
 
 class Genre(CategoryGenreAbstract):
     "Жанры произведений"
-
-    name = models.CharField('Жанр', max_length=NAME_LENGTH)
 
     class Meta(CategoryGenreAbstract.Meta):
         verbose_name = 'Жанр'
@@ -108,6 +105,7 @@ class PubDateMixin(models.Model):
 
     class Meta:
         abstract = True
+        ordering = ('-pub_date',)
 
 
 class Review(PubDateMixin, models.Model):
@@ -131,7 +129,7 @@ class Review(PubDateMixin, models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=['title', 'author'],
+                fields=['author', 'title'],
                 name='unique_review'
             )
         ]
@@ -161,4 +159,3 @@ class Comment(PubDateMixin, models.Model):
     class Meta:
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'
-        ordering = ['-pub_date']

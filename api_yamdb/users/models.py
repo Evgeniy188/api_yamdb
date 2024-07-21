@@ -10,6 +10,11 @@ from .validators import validate_username_me
 
 
 class CinemaUser(AbstractUser):
+    class Meta:
+        verbose_name = 'Пользователь'
+        verbose_name_plural = 'Пользователи'
+        ordering = ('username',)
+
     @property
     def is_admin(self):
         return (self.role == RoleEnum.ADMIN
@@ -43,11 +48,6 @@ class CinemaUser(AbstractUser):
             'unique': _("A user with that username already exists."),
         },
     )
-
-    class Meta:
-        verbose_name = 'Пользователь'
-        verbose_name_plural = 'Пользователи'
-        ordering = ('username',)
 
     def __str__(self):
         return self.username
