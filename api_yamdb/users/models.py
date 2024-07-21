@@ -2,8 +2,8 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.validators import UnicodeUsernameValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-from users.roles import RoleEnum
 
+from users.roles import RoleEnum
 from .constants import (MAX_LENGTH_CONFIRMATION, MAX_LENGTH_EMAIL,
                         MAX_LENGTH_ROLE, MAX_LENGTH_USERNAME)
 from .validators import validate_username_me
