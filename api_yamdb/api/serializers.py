@@ -132,7 +132,7 @@ class SignupSerializer(serializers.Serializer):
         if user_by_email:
             errors['username'] = 'Wrong username'
         if errors:
-            raise ValidationError(errors)
+            raise serializers.ValidationError(errors)
 
         return data
 
