@@ -99,7 +99,6 @@ class UserSerializer(serializers.ModelSerializer):
 class SignupSerializer(serializers.Serializer):
     username = serializers.CharField(
         max_length=MAX_LENGTH_USERNAME,
-        required=False,
         validators=[
             UnicodeUsernameValidator(),
             validate_username_me
@@ -111,7 +110,7 @@ class SignupSerializer(serializers.Serializer):
         }
     )
     email = serializers.EmailField(
-        required=False, max_length=MAX_LENGTH_EMAIL,
+        max_length=MAX_LENGTH_EMAIL,
         error_messages={
             'blank': 'This field may not be blank.',
             'required': 'This field is required.',
@@ -125,30 +124,15 @@ class SignupSerializer(serializers.Serializer):
         email = data.get('email')
         errors = {}
 
-        """
-        Данные проверки не получится убрать, так как тесты
-        требуют определенного формата ответа, отличающегося
-        от стандартного, если данных полей нет.
-
-        Тесты, которые это требуют:
-        test_00_nodata_signup и test_00_invalid_data_signup
-        """
-        if not username:
-            errors['username'] = 'This field is required.'
-        if not email:
-            errors['email'] = 'This field is required.'
-
-        if errors:
-            raise serializers.ValidationError(errors)
-
         user_by_email = User.objects.filter(email=email).first()
         user_by_username = User.objects.filter(username=username).first()
 
-        if user_by_username and user_by_email is None:
-            raise serializers.ValidationError(
-                {'email': 'Email does not match the registered username'})
-        if user_by_email and user_by_username is None:
-            raise serializers.ValidationError({'username': 'Wrong username'})
+        if user_by_username:
+            errors['email'] = 'Email does not match the registered username'
+        if user_by_email:
+            errors['username'] = 'Wrong username'
+        if errors:
+            raise ValidationError(errors)
 
         return data
 

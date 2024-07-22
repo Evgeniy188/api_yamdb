@@ -47,7 +47,6 @@ class Title(models.Model):
         Genre,
         related_name='titles',
         verbose_name='Жанр',
-        blank=True,
     )
     category = models.ForeignKey(
         Category,
@@ -126,7 +125,7 @@ class Review(PubDateMixin, models.Model):
         validators=[MinValueValidator(1), MaxValueValidator(10)]
     )
 
-    class Meta:
+    class Meta(PubDateMixin.Meta):
         constraints = [
             models.UniqueConstraint(
                 fields=['author', 'title'],
@@ -156,6 +155,6 @@ class Comment(PubDateMixin, models.Model):
     def __str__(self):
         return self.text[:TEXT_LIMIT]
 
-    class Meta:
+    class Meta(PubDateMixin.Meta):
         verbose_name = 'Комментарий'
         verbose_name_plural = 'Комментарии'

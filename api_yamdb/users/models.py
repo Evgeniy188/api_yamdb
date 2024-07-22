@@ -28,11 +28,11 @@ class CinemaUser(AbstractUser):
                             choices=RoleEnum.choices,
                             default=RoleEnum.USER)
 
-    bio = models.TextField(blank=True, null=False, default='')
+    bio = models.TextField(blank=True, null=False)
 
     email = models.EmailField(_('email address'),
                               max_length=MAX_LENGTH_EMAIL,
-                              blank=True, unique=True)
+                              unique=True)
 
     confirmation_code = models.CharField(max_length=MAX_LENGTH_CONFIRMATION,
                                          blank=True, null=False, default='')

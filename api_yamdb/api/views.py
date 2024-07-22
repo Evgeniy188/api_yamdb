@@ -96,16 +96,10 @@ class UserViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = (IsAdmin,)
     lookup_field = 'username'
-    filter_backends = [SearchFilter]
+    filter_backends = (SearchFilter,)
     search_fields = ('username',)
-
-    def perform_create(self, serializer):
-        if 'email' not in self.request.data:
-            raise serializers.ValidationError({
-                'detail': 'Only authenticated users can comment'})
-        serializer.save()
 
     @action(detail=False, methods=['get', 'patch'],
             permission_classes=[IsAuthenticated])
@@ -114,12 +108,9 @@ class UserViewSet(viewsets.ModelViewSet):
             serializer = self.get_serializer(request.user)
             return Response(serializer.data)
 
-        partial = True
-        data = dict(request.data)
-        data.pop('role', None)
         serializer = self.get_serializer(request.user,
                                          data=request.data,
-                                         partial=partial)
+                                         partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save(role=request.user.role)
         return Response(serializer.data)

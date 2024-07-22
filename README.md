@@ -7,7 +7,7 @@
 Клонировать репозиторий и перейти в него в командной строке:
 
 ```
-git clone https://github.com/Prygunov-Andrei/api_yamdb.git
+git clone https://github.com/Evgeniy188/api_yamdb
 ```
 
 Cоздать и активировать виртуальное окружение:
