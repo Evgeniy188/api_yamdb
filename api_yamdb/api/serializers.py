@@ -127,9 +127,9 @@ class SignupSerializer(serializers.Serializer):
         user_by_email = User.objects.filter(email=email).first()
         user_by_username = User.objects.filter(username=username).first()
 
-        if user_by_username:
+        if not user_by_username:
             errors['email'] = 'Email does not match the registered username'
-        if user_by_email:
+        if not user_by_email:
             errors['username'] = 'Wrong username'
         if not errors:
             raise serializers.ValidationError(errors)
