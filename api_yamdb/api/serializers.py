@@ -131,7 +131,7 @@ class SignupSerializer(serializers.Serializer):
             errors['email'] = 'Email does not match the registered username'
         if user_by_email:
             errors['username'] = 'Wrong username'
-        if errors:
+        if not errors:
             raise serializers.ValidationError(errors)
 
         return data
