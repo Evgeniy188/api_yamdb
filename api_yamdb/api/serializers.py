@@ -1,4 +1,5 @@
 from django.contrib.auth.validators import UnicodeUsernameValidator
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
@@ -120,20 +121,15 @@ class SignupSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
-        username = data.get('username')
-        email = data.get('email')
-        errors = {}
-
-        user_by_email = User.objects.filter(email=email).first()
-        user_by_username = User.objects.filter(username=username).first()
-
-        if user_by_email:
-            errors['email'] = 'Email does not match the registered username'
-        if user_by_username:
-            errors['username'] = 'Wrong username'
-        if not errors:
-            raise serializers.ValidationError(errors)
-
+        try:
+            User.objects.get_or_create(
+                username=data.get('username'),
+                email=data.get('email')
+            )
+        except IntegrityError:
+            raise serializers.ValidationError(
+                'A user with that username or email already exists.'
+            )
         return data
 
     def create(self, validated_data):
